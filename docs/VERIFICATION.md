@@ -38,4 +38,4 @@ cargo test
   is unconfigured; assertions focus on contracts and non-panic forward paths
   rather than captured sink rows.
 - Sad-path tests are named with `_sad` so audits detect them; they assert
-  concrete saturation and acceptance defaults, not smoke-only calls.
+  concrete saturation and acceptance defaults, beyond smoke-only checks.
