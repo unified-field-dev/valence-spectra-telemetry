@@ -31,6 +31,10 @@ let _sink = install_from_env();
 |----------|--------|---------|
 | `VALENCE_TELEMETRY` | `off`, `console`, `spectra` | `spectra` (when Spectra is configured) |
 
+## Examples
+
+Runnable smoke: [examples/README.md](examples/README.md).
+
 ## Verify
 
 ```bash

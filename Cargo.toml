@@ -62,3 +62,6 @@ futures = { workspace = true }
 tokio = { workspace = true }
 chrono = { workspace = true }
 
+
+[[example]]
+name = "telemetry_sink_smoke"
