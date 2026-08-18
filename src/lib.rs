@@ -85,6 +85,8 @@
 //! // privacy-eval events now flow through Spectra automatically.
 //! ```
 //!
+//! Runnable: `cargo run -p valence-spectra-telemetry --example telemetry_sink_smoke`.
+//!
 //! ## Where to look next
 //!
 //! - [`install_from_env`] / [`SpectraTelemetrySink`] — process-wide `TelemetrySink` bootstrap
