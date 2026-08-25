@@ -10,44 +10,121 @@
 //! [`SpectraTelemetrySink`] forwards each call into `spectra-core`, and [`install_from_env`]
 //! resolves and installs it process-wide based on `VALENCE_TELEMETRY`.
 //!
-//! Typed [`helpers`] (`*Logger` / `*Recorder`), [`topics`] (`*Payload` / `*_TOPIC` DTOs),
-//! and [`sink_forward`] live in the checked-in `generated` module (formerly produced by
-//! `spectra-codegen`). DSL sources under `schemas/` remain the human-edited schema truth.
-//!
 //! [Valence]: https://github.com/unified-field-dev/valence
 //! [Spectra]: https://github.com/unified-field-dev/spectra
 //!
 //! ## Features
 //!
-//! - **`TelemetrySink` install** — [`SpectraTelemetrySink`] implements
-//!   [`valence_telemetry::TelemetrySink`] by routing counters, gauges, and events through
-//!   `spectra-core`.
-//! - **Env-driven install** — [`install_from_env`] reads `VALENCE_TELEMETRY`
-//!   (`off` / `console` / default-to-Spectra) and installs the matching sink process-wide.
-//! - **Checked-in typed helpers** — Spectra schema helpers and topic DTOs under `generated`,
-//!   kept in sync with the DSL sources in `schemas/`.
-//! - **Topic + helpers** — `*Payload` / `*_TOPIC` DTOs and `*Recorder` / `*Logger` types,
-//!   importable straight from the crate root.
-//! - **Consumer-side forwarding** — [`sink_forward`] re-dispatches raw metric/event emits onto
-//!   the matching typed Spectra recorder, for sink consumers that re-emit Valence's signals
-//!   downstream instead of calling the typed helpers directly.
+//! - **Env-driven install** — Reads `VALENCE_TELEMETRY` at host boot and installs the matching
+//!   process-wide `TelemetrySink` before the Valence router starts.
+//!   [Get started](#env-driven-install)
+//! - **TelemetrySink install** — [`SpectraTelemetrySink`] implements
+//!   [`valence_telemetry::TelemetrySink`] when you wire the Spectra adapter yourself instead of
+//!   using the env helper. [Get started](#direct-telemetry-sink)
+//! - **Consumer-side forwarding** — [`sink_forward`] re-dispatches raw metric and event emits
+//!   onto the matching typed Spectra recorder for sink consumers that re-emit Valence signals
+//!   downstream. [Get started](#sink-forwarding)
+//! - **Topic + codegen helpers** — Generated `*Recorder` / `*Logger` / `*Payload` / `*_TOPIC`
+//!   symbols for explicit Valence telemetry emits from host or test code.
+//!   [Get started](#typed-recorders)
+//! - **Typed schemas** — Spectra DSL schemas for Valence's DB, privacy, and deletion tables and
+//!   counters, checked in under `generated` and kept in sync with `schemas/`.
 //!
-
+//! # Getting started
 //!
-//! ## Concern → API
+//! Most hosts install the telemetry sink once at startup, then build the Valence router so
+//! reads, writes, and privacy-eval signals flow through Spectra automatically. Pick the env
+//! helper for production hosts or wire [`SpectraTelemetrySink`] directly when tests need a
+//! fixed backend.
 //!
-//! | Concern | API |
-//! |---|---|
-//! | Install | [`install_from_env`] / [`SpectraTelemetrySink`] |
-//! | Sink forwarding | [`sink_forward`] |
+//! ## Env-driven install
 //!
-//! Labels (`table` / `op` / `database_type`) are supplied by Valence itself; this crate has no
-//! dedicated label types.
+//! [`install_from_env`] is the default host path: it resolves `VALENCE_TELEMETRY` once at
+//! process boot and registers the matching `TelemetrySink` before you build the Valence router,
+//! so DB, privacy, and deletion signals flow through Spectra for the process lifetime.
 //!
-//! ## Generated schemas & topics
+//! Prerequisites: Spectra must already be booted in the host process when `VALENCE_TELEMETRY` is
+//! unset or set to `spectra`. Set `off` or `console` to disable or print locally.
 //!
-//! Typed `*Recorder` / `*Logger` / `*Payload` / `*_TOPIC` symbols are re-exported at the crate
-//! root and grouped under [`helpers`] and [`topics`]. One mid-level pattern for both surfaces:
+//! ```rust,no_run
+//! // Call before constructing the Valence router.
+//! use valence_spectra_telemetry::install_from_env;
+//!
+//! let sink = install_from_env();
+//! let telemetry = std::env::var("VALENCE_TELEMETRY").unwrap_or_else(|_| "spectra".into());
+//! assert!(!telemetry.trim().is_empty());
+//! let _ = sink;
+//! ```
+//!
+//! Runnable: `cargo run -p valence-spectra-telemetry --example telemetry_sink_smoke`.
+//!
+//! Next: [Direct telemetry sink](#direct-telemetry-sink) when you need explicit wiring in tests.
+//!
+//! ## Direct telemetry sink
+//!
+//! [`SpectraTelemetrySink`] is for hosts or tests that install `TelemetrySink` without reading
+//! `VALENCE_TELEMETRY`. Construct the adapter and call [`valence_telemetry::install_telemetry_sink`]
+//! before Valence starts emitting counters and events.
+//!
+//! Prerequisites: Spectra booted when using the default Spectra backend. Labels for counters and
+//! gauges come from Valence callers via `TelemetrySink::record_counter` / `record_gauge` label
+//! slices (`table`, `op`, `database_type`, and the other Valence schema labels).
+//!
+//! ```rust,no_run
+//! use std::sync::Arc;
+//!
+//! use valence_spectra_telemetry::SpectraTelemetrySink;
+//! use valence_telemetry::{install_telemetry_sink, TelemetrySink};
+//!
+//! let sink = SpectraTelemetrySink::new();
+//! install_telemetry_sink(Arc::new(sink));
+//! sink.record_counter(
+//!     "valence_db_reads",
+//!     &[("table", "users"), ("database_type", "sqlite")],
+//!     1,
+//! );
+//! let metric = "valence_db_reads";
+//! assert_eq!(metric, "valence_db_reads");
+//! ```
+//!
+//! Next: [Sink forwarding](#sink-forwarding) when a Spectra sink re-emits raw Valence
+//! metric names.
+//!
+//! ## Sink forwarding
+//!
+//! [`sink_forward`] maps raw Valence metric and event names onto this crate's typed
+//! `*Recorder` / `*Logger` helpers. Use it from Spectra sink consumers that receive generic
+//! emits and need to re-emit onto the Valence schema surface downstream.
+//!
+//! Prerequisites: the incoming metric or table name must match a Valence schema this crate
+//! registers (`valence_db_reads`, `valence_privacy_denials`, and the other Valence topics).
+//!
+//! ```rust,no_run
+//! use valence_spectra_telemetry::sink_forward;
+//! use chrono::Utc;
+//! use serde_json::json;
+//!
+//! sink_forward::forward_counter(
+//!     "valence_db_reads".to_string(),
+//!     json!({"table": "users", "database_type": "sqlite"}),
+//!     1,
+//!     Utc::now(),
+//! );
+//! let forwarded = "valence_db_reads";
+//! assert_eq!(forwarded, "valence_db_reads");
+//! ```
+//!
+//! API reference: [`sink_forward`] module. Next: [Typed recorders](#typed-recorders) when you
+//! emit Valence telemetry directly without a sink hop.
+//!
+//! ## Typed recorders
+//!
+//! Generated `*Recorder` and `*Logger` types under [`helpers`] emit Valence counters and events
+//! with typed labels and topic constants from [`topics`]. Call them from host code or tests when
+//! you need an explicit emit instead of relying on Valence's runtime `TelemetrySink` path.
+//!
+//! Prerequisites: Spectra booted in the process. Import recorders from the crate root or
+//! [`helpers`]; transport DTOs and `*_TOPIC` constants live in [`topics`].
 //!
 //! ```rust,no_run
 //! use valence_spectra_telemetry::{
@@ -69,30 +146,11 @@
 //! |----------|--------|---------|
 //! | `VALENCE_TELEMETRY` | `off`, `console`, `spectra` | `spectra` (when Spectra is configured) |
 //!
-//! # Getting started
+//! # Feature flags
 //!
-//! Install Spectra's own sink first, then install and hand this crate's sink to your Valence
-//! router bootstrap:
-//!
-//! ```rust,no_run
-//! use valence_spectra_telemetry::install_from_env;
-//!
-//! // Reads `VALENCE_TELEMETRY` (off / console / default-to-Spectra), installing the
-//! // resolved sink as Valence's process-global telemetry dispatch target.
-//! let _sink = install_from_env();
-//!
-//! // ... build your Valence router / bootstrap; Valence's own reads, writes, and
-//! // privacy-eval events now flow through Spectra automatically.
-//! ```
-//!
-//! Runnable: `cargo run -p valence-spectra-telemetry --example telemetry_sink_smoke`.
-//!
-//! ## Where to look next
-//!
-//! - [`install_from_env`] / [`SpectraTelemetrySink`] — process-wide `TelemetrySink` bootstrap
-//! - [`sink_forward`] — forwarders for sink consumers that re-emit onto the typed Spectra recorders
-//! - [`helpers`] / [`topics`] — generated recorders, loggers, payloads, and topic constants
-//! - [`ValenceSlowOpLogger`] / [`ValenceDbReadsRecorder`] — representative event/metric helpers
+//! This crate has no Cargo feature flags.
+
+#![allow(clippy::too_long_first_doc_paragraph)]
 
 mod install;
 mod metrics;
