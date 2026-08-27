@@ -18,7 +18,7 @@
 //! - **Env-resolved telemetry install** — Reads `VALENCE_TELEMETRY` at host boot and installs the matching
 //!   process-wide `TelemetrySink` before the Valence router starts.
 //!   [Get started](#env-driven-install)
-//! - **Spectra TelemetrySink adapter** — [`SpectraTelemetrySink`] implements
+//! - **Spectra `TelemetrySink` adapter** — [`SpectraTelemetrySink`] implements
 //!   [`valence_telemetry::TelemetrySink`] when you wire the Spectra adapter yourself instead of
 //!   using the env helper. [Get started](#direct-telemetry-sink)
 //! - **Consumer-side forwarding** — [`sink_forward`] re-dispatches raw metric and event emits
