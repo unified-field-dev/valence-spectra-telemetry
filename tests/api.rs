@@ -149,7 +149,7 @@ fn topic_constants_are_non_empty_happy() {
         VALENCE_DB_WRITES_TOPIC,
         VALENCE_DB_ERRORS_TOPIC,
     ] {
-        assert!(!topic.is_empty());
+        assert_ne!(topic, "");
         assert!(
             topic.starts_with("spectra.metric."),
             "unexpected metric topic: {topic}"
@@ -165,7 +165,7 @@ fn topic_constants_are_non_empty_happy() {
         VALENCE_PRIVACY_EVAL_TOPIC,
         VALENCE_QUERY_LOG_TOPIC,
     ] {
-        assert!(!topic.is_empty());
+        assert_ne!(topic, "");
         assert!(
             topic.starts_with("spectra.event."),
             "unexpected event topic: {topic}"
